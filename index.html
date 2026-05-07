@@ -1,1183 +1,176 @@
-
+```html
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-    <link rel="manifest" href="manifest.json">
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>打工時數計算器</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>支出記帳 App</title>
     <style>
-        body { 
-            overflow: hidden; 
-            background-color: #f8fafc;
-            -webkit-tap-highlight-color: transparent;
+        :root {
+            --green-theme: #8ba88e; /* 草綠色 */
+            --exp-red: #c88c8c;
+            --inc-blue: #7ba8c8; /* 收入藍色 */
+            --tra-purple: #9b8ba8; /* 轉帳紫色 */
+            --bg-gray: #f4f6f4;
         }
 
-        .lock-bg {
-            position: fixed !important;
-            width: 100%;
-            height: 100%;
-            overflow: hidden !important;
-            touch-action: none !important;
-            -ms-touch-action: none !important;
-        }
+        body { font-family: -apple-system, sans-serif; margin: 0; background: var(--bg-gray); height: 100vh; overflow: hidden; }
 
-        .scrollable-content {
-            overscroll-behavior: contain;
-        }
+        /* --- 主畫面 --- */
+        .header { background: white; padding: 45px 20px 15px; text-align: center; border-bottom: 1px solid #eee; }
+        .stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); margin-top: 15px; }
+        .stat-item b { display: block; font-size: 16px; margin-top: 5px; }
+        .stat-item label { font-size: 11px; color: #999; }
 
-        #editModal, #dailyListModal, #detailModal, #settingsOverlay, #searchResultsOverlay, #rangeStatsOverlay {
-            overscroll-behavior: contain;
-            -webkit-overflow-scrolling: touch;
-        }
+        .date-nav { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 5px; }
+        .date-nav select { border: none; font-size: 14px; font-weight: bold; background: transparent; color: #333; outline: none; }
+        .today-btn { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: #eee; color: #666; cursor: pointer; }
 
-        .calendar-grid { 
-            display: grid; 
-            grid-template-columns: repeat(7, 1fr); 
-            gap: 4px; 
-            align-items: stretch; 
-        }
+        .cal-box { background: white; margin: 15px; padding: 10px; border-radius: 15px; }
+        .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; }
+        .cal-day { height: 55px; border: 0.5px solid #f9f9f9; display: flex; flex-direction: column; justify-content: center; border-radius: 8px; cursor: pointer; position: relative; }
+        .cal-day.active { border: 1.5px solid #007aff; background: #f0f7ff; }
+        .day-val { font-size: 8px; color: var(--exp-red); min-height: 10px; line-height: 1; }
+        .day-val.inc { color: var(--inc-blue); }
+        .day-val.tra { color: #999; }
         
-        .day-cell { 
-            padding: 6px 4px; 
-            transition: transform 0.1s ease, background-color 0.2s; 
-            position: relative; 
-            display: flex; 
-            flex-direction: column; 
-            border-radius: 12px; 
-            border: 1px solid #e2e8f0;
-            background-color: white;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.02);
-            height: 100%;
-            min-height: 85px;
+        /* 新增：備註的小圓點提示 */
+        .note-dot { position: absolute; top: 5px; right: 5px; width: 4px; height: 4px; background: #ccc; border-radius: 50%; display: none; }
+        .has-note .note-dot { display: block; }
+
+        /* --- 輸入頁面 --- */
+        #input-page {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: white; transform: translateY(100%); transition: 0.3s ease;
+            z-index: 100; display: flex; flex-direction: column;
         }
+        #input-page.show { transform: translateY(0); }
+
+        .mode-switcher {
+            display: flex; background: #eee; border-radius: 20px; padding: 2px; width: 180px; margin: 0 auto;
+        }
+        .mode-btn { flex: 1; padding: 5px 0; border-radius: 18px; font-size: 13px; text-align: center; cursor: pointer; transition: 0.2s; }
+        .mode-btn.active { background: white; font-weight: bold; }
+        .mode-btn.active.exp { color: var(--exp-red); }
+        .mode-btn.active.inc { color: var(--inc-blue); }
+        .mode-btn.active.tra { color: var(--green-theme); }
+
+        .cat-grid { flex: 1; overflow-y: auto; display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; padding: 20px; }
+        .cat-item { text-align: center; font-size: 11px; color: #555; }
+        .cat-icon { 
+            width: 50px; height: 50px; background: white; border: 1px solid #eee; 
+            border-radius: 12px; margin: 0 auto 5px; display: flex; align-items: center; 
+            justify-content: center; font-size: 24px; transition: 0.2s;
+        }
+        .cat-item.selected .cat-icon { border: 2.5px solid var(--green-theme); background: #f9fbf9; transform: scale(1.05); }
+
+        .transfer-flow { display: none; padding: 40px 20px; flex-direction: column; gap: 20px; flex: 1; justify-content: center; }
+        #input-page.mode-tra .transfer-flow { display: flex; }
+        #input-page.mode-tra .cat-grid { display: none; }
         
-        .day-cell:active { transform: scale(0.95); background-color: #f1f5f9; }
-        .is-weekend { background-color: #fff1f2 !important; }
-        .is-holiday { background-color: #fef2f2 !important; border-color: #fecaca !important; }
-        .is-today { outline: 2px solid #3b82f6; outline-offset: -1px; z-index: 5; background-color: #eff6ff !important; }
+        .transfer-row { display: flex; align-items: center; justify-content: space-around; }
+        .acc-box { text-align: center; flex: 1; }
+        .acc-icon { width: 80px; height: 80px; background: #f9f9f9; border-radius: 20px; margin: 0 auto 10px; display: flex; align-items: center; justify-content: center; font-size: 40px; border: 2px solid #eee; }
+        .acc-box label { font-size: 14px; color: #666; display: block; margin-bottom: 10px; font-weight: bold; }
+
+        /* 計算機區塊 */
+        .calc-box { background: var(--green-theme); border-radius: 25px 25px 0 0; padding: 15px; }
+        .calc-display-group { background: white; border-radius: 12px; padding: 12px; margin-bottom: 10px; }
+        .calc-display { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f0f0f0; padding-bottom: 8px; margin-bottom: 8px; }
+        .calc-display b { font-size: 24px; color: var(--exp-red); }
         
-        .holiday-dot {
-            position: absolute;
-            top: 4px;
-            right: 4px;
-            width: 5px;
-            height: 5px;
-            background-color: #ef4444;
-            border-radius: 50%;
-        }
+        /* 新增：備註輸入框樣式 */
+        .note-input { border: none; width: 100%; font-size: 14px; color: #666; outline: none; padding: 5px 0; }
+        .note-input::placeholder { color: #ccc; }
 
-        #searchContainer {
-            position: relative;
-            height: 48px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            transition: all 0.3s ease;
-        }
-
-        #searchWrapper { 
-            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); 
-            width: 44px; 
-            height: 44px;
-            overflow: hidden; 
-            display: flex; 
-            align-items: center; 
-            background-color: #f1f5f9;
-            border-radius: 9999px;
-            position: relative;
-            flex-shrink: 0;
-            border: 1px solid #e2e8f0;
-        }
+        #input-page.mode-exp .calc-box { background: var(--exp-red); }
+        #input-page.mode-exp .key.white { color: var(--exp-red); }
+        #input-page.mode-exp .calc-display b { color: var(--exp-red); }
         
-        #searchWrapper.active { 
-            flex-grow: 1;
-            width: 100%;
-            background-color: #f1f5f9; 
-        }
+        #input-page.mode-inc .calc-display b { color: var(--inc-blue); } 
+        #input-page.mode-inc .calc-box { background: var(--inc-blue); } 
+        #input-page.mode-inc .key.white { color: var(--inc-blue); }
 
-        #searchInput { 
-            opacity: 0; 
-            transition: opacity 0.2s; 
-            width: 100%; 
-            font-size: 14px; 
-            border: none; 
-            background: transparent; 
-            padding: 0 44px; 
-            height: 100%;
-            display: none;
-        }
-        
-        #searchWrapper.active #searchInput { 
-            opacity: 1; 
-            display: block;
-        }
+        #input-page.mode-tra .calc-display b { color: var(--green-theme); } 
+        #input-page.mode-tra .calc-box { background: var(--green-theme); } 
+        #input-page.mode-tra .key.white { color: var(--green-theme); }
 
-        .icon-btn {
-            width: 44px;
-            height: 44px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background-color: #f1f5f9;
-            border-radius: 9999px;
-            border: 1px solid #e2e8f0;
-            transition: all 0.2s;
-            flex-shrink: 0;
-            padding: 0;
-        }
-        
-        .icon-btn svg {
-            width: 22px;
-            height: 22px;
-            color: #64748b;
-            display: block;
-        }
+        .key-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+        .key { background: rgba(255,255,255,0.2); height: 50px; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 20px; }
+        .key.white { background: white; }
 
-        .ios-switch { position: relative; display: inline-block; width: 44px; height: 26px; }
-        .ios-switch input { opacity: 0; width: 0; height: 0; }
-        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #e9e9ea; transition: .3s; border-radius: 26px; }
-        .slider:before { position: absolute; content: ""; height: 22px; width: 22px; left: 2px; bottom: 2px; background-color: white; transition: .3s; border-radius: 50%; box-shadow: 0 2px 5px rgba(0,0,0,0.15); }
-        input:checked + .slider { background-color: #34c759; }
-        input:checked + .slider:before { transform: translateX(18px); }
-
-        .picker-container {
-            position: relative; height: 120px; overflow: hidden; display: flex; align-items: center; justify-content: center;
-            background: #f8fafc; border-radius: 0.75rem;
-            mask-image: linear-gradient(to bottom, transparent, black 35%, black 65%, transparent);
-            -webkit-mask-image: linear-gradient(to bottom, transparent, black 35%, black 65%, transparent);
-        }
-        .picker-wheel { position: absolute; top: 0; width: 100%; display: flex; flex-direction: column; align-items: center; will-change: transform; cursor: ns-resize; touch-action: none; }
-        .picker-item { height: 32px; line-height: 32px; font-size: 0.9rem; font-weight: 600; color: #94a3b8; user-select: none; }
-        .picker-item.selected { color: #3b82f6; font-size: 1rem; font-weight: 800; }
-        .picker-selection-bar { position: absolute; top: 50%; left: 0; right: 0; height: 32px; transform: translateY(-50%); background: rgba(59, 130, 246, 0.08); pointer-events: none; border-top: 1px solid rgba(59, 130, 246, 0.1); border-bottom: 1px solid rgba(59, 130, 246, 0.1); z-index: 10; }
-
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-
-        #monthView, #yearView { transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease; }
-
-        .add-btn-container {
-            position: absolute;
-            bottom: 80px; 
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 100;
-        }
-        .add-btn {
-            width: 60px;
-            height: 60px;
-            background-color: #0f172a;
-            color: white;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 10px 25px -5px rgba(0,0,0,0.4);
-            border: 4px solid white;
-            transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-        }
-        .add-btn:active { transform: scale(0.9) translateY(5px); }
-
-        .color-dot {
-            width: 32px; height: 32px; border-radius: 50%; cursor: pointer; border: 3px solid transparent; transition: all 0.2s;
-        }
-        .color-dot.selected { border-color: #0f172a; transform: scale(1.1); }
-        
-        #defaultRateSection { display: none; }
-
-        .daily-list-panel {
-            border-radius: 2.5rem !important;
-            margin-bottom: auto;
-            margin-top: auto;
-            max-height: 85vh;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .swipe-item-container {
-            position: relative;
-            overflow: hidden;
-            border-radius: 1rem;
-        }
-        .swipe-content {
-            position: relative;
-            z-index: 2;
-            transition: transform 0.3s ease;
-            background: white;
-        }
-        .swipe-actions {
-            position: absolute;
-            top: 4px;
-            bottom: 4px;
-            right: 4px;
-            width: 70px;
-            background-color: #ef4444;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 1;
-            border-radius: 1rem;
-        }
-        .swipe-content.swiped {
-            transform: translateX(-80px);
-        }
+        .add-btn { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); width: 60px; height: 60px; background: var(--green-theme); border-radius: 30px; color: white; font-size: 35px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
     </style>
 </head>
-<body class="text-slate-800 font-sans">
+<body>
 
-<div id="app" class="max-w-md mx-auto h-screen flex flex-col bg-white shadow-xl relative">
-    
-    <div id="settingsOverlay" class="fixed inset-0 bg-slate-900/60 z-[110] backdrop-blur-sm hidden items-center justify-center p-6 opacity-0 transition-opacity">
-        <div id="settingsPanel" class="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl p-6 border border-slate-100 flex flex-col items-center max-h-[85vh] overflow-y-auto no-scrollbar scrollable-content">
-            <div class="w-full flex justify-between items-center mb-6">
-                <h3 class="text-xl font-black text-slate-900 tracking-tight">設定</h3>
-                <button onclick="toggleSettings()" class="text-slate-400 p-2 bg-slate-50 rounded-full">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
-                </button>
+    <div id="home">
+        <div class="header">
+            <div style="font-weight:bold;">預設帳本</div>
+            <div class="date-nav">
+                <select id="year-select" onchange="handleDateChange()"></select>
+                <select id="month-select" onchange="handleDateChange()"></select>
+                <span class="today-btn" onclick="goToToday()">今日</span>
             </div>
-            
-            <div class="w-full space-y-5">
-                <div id="defaultRateSection" class="flex flex-col">
-                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">預設時薪</label>
-                    <input type="number" id="settingDefaultRate" class="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 px-4 font-black text-xl text-center outline-none focus:border-blue-500 transition shadow-sm">
-                </div>
+            <div id="cur-date" style="font-size:12px; color:#007aff; margin:5px;">正在編輯: 4月30日</div>
+            <div class="stat-grid">
+                <div class="stat-item"><label>總額</label><b id="total-val">$0</b></div>
+                <div class="stat-item"><label>收入</label><b id="inc-val" style="color:var(--inc-blue)">$0</b></div>
+                <div class="stat-item"><label>支出</label><b id="exp-val" style="color:var(--exp-red)">$0</b></div>
+            </div>
+        </div>
+        <div class="cal-box">
+            <div class="cal-grid" id="main-grid"></div>
+        </div>
+        <div class="add-btn" onclick="toggleInput(true)">+</div>
+    </div>
 
-                <div class="bg-slate-50 rounded-3xl p-5 border border-slate-100 space-y-4">
-                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">內容顯示開關</label>
-                    <div class="flex justify-between items-center">
-                        <span class="font-bold text-slate-700">顯示標題</span>
-                        <label class="ios-switch"><input type="checkbox" id="checkShowTitle" onchange="updateSetting('showTitle', this.checked)"><span class="slider"></span></label>
-                    </div>
-                    <div class="flex justify-between items-center">
-                        <span class="font-bold text-slate-700">顯示時間</span>
-                        <label class="ios-switch"><input type="checkbox" id="checkShowTime" onchange="updateSetting('showTime', this.checked)"><span class="slider"></span></label>
-                    </div>
-                    <div class="flex justify-between items-center">
-                        <span class="font-bold text-slate-700">顯示時數</span>
-                        <label class="ios-switch"><input type="checkbox" id="checkShowHours" onchange="updateSetting('showHours', this.checked)"><span class="slider"></span></label>
-                    </div>
-                    <div class="flex justify-between items-center">
-                        <span class="font-bold text-slate-700">顯示薪資預估</span>
-                        <label class="ios-switch"><input type="checkbox" id="checkShowSalary" onchange="updateSetting('showSalary', this.checked)"><span class="slider"></span></label>
-                    </div>
-                    <div class="flex justify-between items-center">
-                        <span class="font-bold text-slate-700">顯示備註</span>
-                        <label class="ios-switch"><input type="checkbox" id="checkShowNote" onchange="updateSetting('showNote', this.checked)"><span class="slider"></span></label>
-                    </div>
-                </div>
+    <div id="input-page" class="mode-exp">
+        <div style="padding: 20px; display: flex; justify-content: space-between; align-items: center;">
+            <span onclick="toggleInput(false)" style="font-size:20px;">✕</span>
+            <div class="mode-switcher">
+                <div class="mode-btn active exp" onclick="setMode('exp')">支出</div>
+                <div class="mode-btn inc" onclick="setMode('inc')">收入</div>
+                <div class="mode-btn tra" onclick="setMode('tra')">轉帳</div>
+            </div>
+            <span style="width:20px;"></span>
+        </div>
 
-                <div class="bg-blue-50 rounded-3xl p-5 border border-blue-100 space-y-4">
-                    <label class="block text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">資料備份 (更換圖示用)</label>
-                    <div class="grid grid-cols-2 gap-3">
-                        <button onclick="exportData()" class="py-3 bg-white border border-blue-200 text-blue-600 text-xs font-black rounded-xl shadow-sm active:scale-95 transition-all">匯出資料代碼</button>
-                        <button onclick="importData()" class="py-3 bg-blue-600 text-white text-xs font-black rounded-xl shadow-sm active:scale-95 transition-all">匯入資料代碼</button>
-                    </div>
-                </div>
+        <div class="cat-grid" id="cat-grid"></div>
 
-                <button onclick="saveSettings()" class="w-full bg-slate-900 text-white font-black py-4 rounded-2xl shadow-xl active:scale-95 transition-all text-lg">完成設定</button>
+        <div class="transfer-flow">
+            <div class="transfer-row">
+                <div class="acc-box">
+                    <label>轉出帳戶</label>
+                    <div class="acc-icon">💵</div>
+                </div>
+                <div style="font-size: 32px; color: #ddd; margin-top: 25px;">➔</div>
+                <div class="acc-box">
+                    <label>轉入帳戶</label>
+                    <div class="acc-icon">💳</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="calc-box">
+            <!-- 修改：將顯示區擴展以容納備註 -->
+            <div class="calc-display-group">
+                <div class="calc-display">
+                    <span id="selected-cat-name" style="color:#999;">請選擇類別</span>
+                    <b id="amt-display">$0</b>
+                </div>
+                <input type="text" id="note-field" class="note-input" placeholder="新增備註...">
+            </div>
+            <div class="key-grid">
+                <div class="key white" onclick="press('7')">7</div><div class="key white" onclick="press('8')">8</div><div class="key white" onclick="press('9')">9</div><div class="key" onclick="press('AC')">AC</div>
+                <div class="key white" onclick="press('4')">4</div><div class="key white" onclick="press('5')">5</div><div class="key white" onclick="press('6')">6</div><div class="key">÷</div>
+                <div class="key white" onclick="press('1')">1</div><div class="key white" onclick="press('2')">2</div><div class="key white" onclick="press('3')">3</div><div class="key">×</div>
+                <div class="key white" onclick="press('.')">.</div><div class="key white" onclick="press('0')">0</div><div class="key white" onclick="press('00')">00</div><div class="key white" style="font-size:14px;" onclick="doSave()">完成</div>
             </div>
         </div>
     </div>
 
-    <div id="rangeStatsOverlay" class="fixed inset-0 bg-slate-900/60 z-[150] backdrop-blur-sm hidden items-center justify-center p-4 opacity-0 transition-opacity">
-        <div class="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl p-6 flex flex-col max-h-[90vh] scrollable-content">
-            <div class="flex justify-between items-center mb-6">
-                <h3 class="text-xl font-black text-slate-900 tracking-tight">區間薪資查詢</h3>
-                <button onclick="toggleRangeStats()" class="text-slate-400 p-2 bg-slate-50 rounded-full">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
-                </button>
-            </div>
-
-            <div class="space-y-4 mb-6">
-                <div class="grid grid-cols-2 gap-3">
-                    <div class="bg-slate-50 p-3 rounded-2xl border border-slate-100">
-                        <label class="text-[9px] font-black text-blue-500 uppercase ml-1 block mb-1">開始日期</label>
-                        <input type="date" id="statsStartDate" class="w-full bg-transparent font-bold text-sm outline-none cursor-pointer">
-                    </div>
-                    <div class="bg-slate-50 p-3 rounded-2xl border border-slate-100">
-                        <label class="text-[9px] font-black text-blue-500 uppercase ml-1 block mb-1">結束日期</label>
-                        <input type="date" id="statsEndDate" class="w-full bg-transparent font-bold text-sm outline-none cursor-pointer">
-                    </div>
-                </div>
-                <div class="bg-slate-50 px-4 py-2 rounded-2xl border border-slate-100">
-                    <label class="text-[9px] font-black text-slate-400 uppercase ml-1 block mb-1">過濾工作標題</label>
-                    <input type="text" id="statsFilterTitle" placeholder="留空則統計全部" class="w-full bg-transparent font-bold text-sm outline-none">
-                </div>
-                
-                <div class="flex gap-2">
-                    <button onclick="execRangeStats()" class="flex-grow bg-blue-600 text-white font-black py-3.5 rounded-2xl shadow-lg active:scale-95 transition-all text-sm">執行查詢</button>
-                    <button id="copyRangeBtn" onclick="copyRangeToClipboard()" class="hidden w-14 bg-slate-900 text-white rounded-2xl flex items-center justify-center active:scale-95 transition-all">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/></svg>
-                    </button>
-                </div>
-            </div>
-
-            <div id="rangeResultSummary" class="hidden grid grid-cols-2 gap-3 bg-blue-50 p-4 rounded-2xl mb-4 border border-blue-100">
-                <div id="rangeTotalCol">
-                    <p class="text-[9px] font-black text-blue-400 uppercase">區間總薪資</p>
-                    <p id="rangeTotalSalary" class="text-xl font-black text-blue-600">$0</p>
-                </div>
-                <div>
-                    <p class="text-[9px] font-black text-blue-400 uppercase">區間總工時</p>
-                    <p id="rangeTotalHours" class="text-xl font-black text-slate-800">0.0h</p>
-                </div>
-            </div>
-
-            <div id="rangeDetailsList" class="flex-grow overflow-y-auto space-y-3 no-scrollbar scrollable-content pb-4"></div>
-        </div>
-    </div>
-
-    <header class="bg-white px-4 pt-6 pb-2 border-b shrink-0 z-50">
-        <div id="navHeader" class="flex justify-between items-center mb-4">
-            <button onclick="changeDate(-1)" class="p-2 text-slate-400 active:bg-slate-50 rounded-full transition">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M15 19l-7-7 7-7" /></svg>
-            </button>
-            <div class="flex flex-col items-center">
-                <h1 id="yearDisplay" onclick="toggleView()" class="text-xl font-black text-slate-900 cursor-pointer hover:text-blue-600 transition-colors">2026年</h1>
-                <h2 id="monthDisplay" class="text-sm font-black text-blue-500">2月</h2>
-            </div>
-            <button onclick="changeDate(1)" class="p-2 text-slate-400 active:bg-slate-50 rounded-full transition">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M9 5l7 7-7 7" /></svg>
-            </button>
-        </div>
-
-        <div id="searchContainer" class="px-1 mb-2">
-            <div id="searchWrapper">
-                <button onclick="openSearch()" class="absolute left-0 w-11 h-11 flex items-center justify-center text-slate-500 z-10">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-                </button>
-                <input type="text" id="searchInput" oninput="execSearch()" onblur="handleSearchBlur()" placeholder="搜尋紀錄標題..." class="font-bold outline-none">
-                <button onclick="closeSearch()" id="clearSearchBtn" class="absolute right-0 w-11 h-11 flex items-center justify-center text-slate-400 z-10 hidden">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"/></svg>
-                </button>
-            </div>
-
-            <div id="centerActions" class="flex-grow flex justify-center items-center">
-                <button id="todayBtn" onclick="goToToday()" class="px-8 py-2.5 bg-[#0f172a] text-white rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all">Today</button>
-            </div>
-
-            <button id="statsRangeBtn" onclick="toggleRangeStats()" class="icon-btn mr-2">
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
-                </svg>
-            </button>
-
-            <button id="settingsBtn" onclick="toggleSettings()" class="icon-btn">
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                </svg>
-            </button>
-        </div>
-
-        <div id="statsBar" class="grid grid-cols-2 gap-3 bg-white border border-slate-100 p-4 rounded-[1.5rem] mt-4 shadow-sm">
-            <div class="border-r border-slate-100 pr-2">
-                <p id="labelSalary" class="text-[9px] uppercase text-slate-400 font-black mb-1">預估本月薪資</p>
-                <p id="totalSalaryNet" class="text-2xl font-black text-blue-600 leading-none">$0</p>
-            </div>
-            <div class="pl-2">
-                <p id="labelHours" class="text-[9px] uppercase text-slate-400 font-black mb-1">本月累計工時</p>
-                <p id="totalHoursNet" class="text-2xl font-black text-slate-800 leading-none">0.0 <span class="text-[10px] font-normal opacity-50">hr</span></p>
-            </div>
-        </div>
-    </header>
-
-    <div class="relative flex-grow overflow-hidden" id="mainViewArea">
-        <div id="searchResultsOverlay" class="absolute inset-x-0 top-0 max-h-full z-[70] bg-white shadow-2xl overflow-y-auto hidden p-5 space-y-3 rounded-b-[2rem] border-b border-slate-100 scrollable-content"></div>
-        <div id="swipeContainer" class="h-full relative overflow-y-auto no-scrollbar pb-32 scrollable-content">
-            <main id="monthView" class="p-4">
-                <div class="calendar-grid text-center mb-3">
-                    <div class="text-[10px] font-black text-red-400 uppercase">S</div>
-                    <div class="text-[10px] font-bold text-slate-300 uppercase">M</div>
-                    <div class="text-[10px] font-bold text-slate-300 uppercase">T</div>
-                    <div class="text-[10px] font-bold text-slate-300 uppercase">W</div>
-                    <div class="text-[10px] font-bold text-slate-300 uppercase">T</div>
-                    <div class="text-[10px] font-bold text-slate-300 uppercase">F</div>
-                    <div class="text-[10px] font-black text-red-400 uppercase">S</div>
-                </div>
-                <div id="calendarDays" class="calendar-grid"></div>
-            </main>
-            <main id="yearView" class="p-6 pb-12 hidden">
-                <div id="yearHeaderIos" class="text-3xl font-black text-slate-900 mb-6 pl-1 border-b-2 border-slate-100 pb-3">2026</div>
-                <div id="yearMonthsIos" class="grid grid-cols-3 gap-x-4 gap-y-8"></div>
-            </main>
-        </div>
-    </div>
-
-    <div id="dailyListModal" class="fixed inset-0 bg-slate-900/60 hidden items-center justify-center z-[115] backdrop-blur-sm p-4">
-        <div class="bg-white w-full max-w-sm daily-list-panel shadow-2xl p-6 transform transition-all scrollable-content">
-            <div class="flex justify-between items-center mb-5 shrink-0">
-                <div>
-                    <h3 id="dailyListDate" class="text-lg font-black text-slate-900">2026/02/05 紀錄清單</h3>
-                    <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">點擊項目查看詳情或編輯</p>
-                </div>
-                <button onclick="closeDailyList()" class="p-2 bg-slate-50 rounded-full text-slate-400">
-                    <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12"/></svg>
-                </button>
-            </div>
-            <div id="dailyItemsContainer" class="space-y-3 overflow-y-auto no-scrollbar flex-grow pb-2 scrollable-content">
-            </div>
-            <div class="mt-4 pt-4 border-t border-slate-100 shrink-0">
-                <button onclick="openModalForSelected(); closeDailyList();" class="w-full py-3.5 bg-blue-50 text-blue-600 font-black rounded-2xl text-sm active:scale-95 transition-all flex items-center justify-center gap-2">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 4v16m8-8H4"/></svg>
-                    新增排班紀錄
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <div class="add-btn-container">
-        <button id="mainAddBtn" onclick="openModalForSelected()" class="add-btn">
-            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M12 4v16m8-8H4"/></svg>
-        </button>
-    </div>
-
-    <div id="editModal" class="fixed inset-0 bg-slate-900/60 hidden items-end sm:items-center justify-center z-[120] backdrop-blur-sm p-4 overflow-y-auto">
-        <div class="bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl p-7 my-auto transform transition-all scrollable-content">
-            <div class="flex justify-between items-start mb-6">
-                <div>
-                    <h2 id="modalDate" class="text-2xl font-black text-slate-900">2026/02/05</h2>
-                    <span id="holidayTag" class="hidden inline-block px-3 py-1 bg-red-100 text-red-600 text-[10px] font-black rounded-full mt-2 uppercase tracking-wide">國定假日 2x</span>
-                </div>
-                <button onclick="closeModal()" class="p-2 bg-slate-100 rounded-full text-slate-400 active:scale-90 transition">
-                    <svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12"/></svg>
-                </button>
-            </div>
-            
-            <div class="space-y-5">
-                <div class="flex gap-3">
-                    <div class="flex-grow">
-                        <label class="block text-[10px] font-black text-slate-400 uppercase mb-1.5 ml-1">排班名稱</label>
-                        <input type="text" id="inputTitle" oninput="autoFillConfig(this.value)" class="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3 font-bold outline-none focus:border-blue-500 text-sm shadow-sm">
-                    </div>
-                    <div class="w-1/3">
-                        <label class="block text-[10px] font-black text-slate-400 uppercase mb-1.5 ml-1">時薪</label>
-                        <input type="number" id="inputRate" class="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3 font-bold outline-none focus:border-blue-500 text-sm shadow-sm">
-                    </div>
-                </div>
-
-                <div>
-                    <label class="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-1">標籤顏色</label>
-                    <div class="flex gap-3" id="colorPicker">
-                        <div class="color-dot bg-emerald-200" data-color="emerald" onclick="selectColor('emerald')"></div>
-                        <div class="color-dot bg-amber-200" data-color="amber" onclick="selectColor('amber')"></div>
-                        <div class="color-dot bg-rose-200" data-color="rose" onclick="selectColor('rose')"></div>
-                        <div class="color-dot bg-blue-200" data-color="blue" onclick="selectColor('blue')"></div>
-                        <div class="color-dot bg-purple-200" data-color="purple" onclick="selectColor('purple')"></div>
-                        <div class="color-dot bg-orange-200" data-color="orange" onclick="selectColor('orange')"></div>
-                        <div class="color-dot bg-pink-200" data-color="pink" onclick="selectColor('pink')"></div>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-[10px] font-black text-slate-400 mb-1.5 uppercase text-center">上班時間</label>
-                        <div class="flex gap-1 bg-slate-50 rounded-2xl p-1.5 border border-slate-200 shadow-sm">
-                            <div id="startHourPicker" class="picker-container flex-1"></div>
-                            <div id="startMinutePicker" class="picker-container flex-1"></div>
-                        </div>
-                    </div>
-                    <div>
-                        <label class="block text-[10px] font-black text-slate-400 mb-1.5 uppercase text-center">下班時間</label>
-                        <div class="flex gap-1 bg-slate-50 rounded-2xl p-1.5 border border-slate-200 shadow-sm">
-                            <div id="endHourPicker" class="picker-container flex-1"></div>
-                            <div id="endMinutePicker" class="picker-container flex-1"></div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="bg-slate-50 rounded-2xl p-4 border border-slate-100">
-                    <div class="flex justify-between items-center">
-                        <span class="text-xs font-black text-slate-700">休息時間</span>
-                        <button id="breakBtn" onclick="toggleBreakInput()" class="px-4 py-2 bg-slate-200 text-slate-500 rounded-xl text-[10px] font-black transition-all uppercase tracking-wider">無休息</button>
-                    </div>
-                    <div id="breakInputWrapper" class="hidden mt-3 pt-3 border-t border-slate-200 flex items-center justify-between">
-                        <span class="text-[10px] font-bold text-slate-400 uppercase">扣除分鐘</span>
-                        <div class="flex items-center gap-2">
-                            <input type="number" id="breakMinutes" value="0" step="5" min="0" oninput="updatePreview()" class="w-16 bg-white border border-slate-200 rounded-xl p-2 text-center font-black text-sm">
-                            <span class="text-[10px] font-bold text-slate-400">MIN</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div>
-                    <label class="block text-[10px] font-black text-slate-400 uppercase mb-1.5 ml-1">備註紀錄</label>
-                    <textarea id="inputNote" rows="2" placeholder="在此輸入排班細節..." class="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3 text-xs font-bold outline-none resize-none shadow-sm"></textarea>
-                </div>
-
-                <div id="previewCard" class="bg-blue-600 p-5 rounded-3xl text-white shadow-xl flex justify-between items-end">
-                    <div>
-                        <p class="text-[10px] font-bold opacity-70 mb-1">本次預計薪資</p>
-                        <p id="previewNetSalary" class="text-3xl font-black tracking-tight">$0</p>
-                    </div>
-                    <div class="text-right">
-                        <p class="text-[10px] font-bold opacity-70 mb-1">淨工時</p>
-                        <p id="previewGrossHours" class="text-lg font-black">0.00h</p>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-2 gap-3 pt-2">
-                    <button onclick="clearDayRecords()" class="py-4 bg-rose-50 text-rose-600 text-sm font-black rounded-l-full rounded-r-2xl active:scale-95 transition-all">清空今日紀錄</button>
-                    <button onclick="saveData()" id="modalSubmitBtn" class="py-4 bg-slate-900 text-white text-sm font-black rounded-r-full rounded-l-2xl active:scale-95 transition-all shadow-lg">加入新項目</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div id="detailModal" class="fixed inset-0 bg-slate-900/60 hidden items-center justify-center z-[130] backdrop-blur-sm p-6">
-        <div class="bg-white w-full max-w-xs rounded-[2rem] shadow-2xl p-6 border border-slate-100 scrollable-content">
-            <div class="flex justify-between items-start mb-4">
-                <div class="flex flex-col">
-                    <span id="detailDateDisplay" class="text-[9px] font-black text-blue-500 uppercase tracking-widest mb-1">2026/02/05</span>
-                    <h3 id="detailTitle" class="text-xl font-black text-slate-900">排班詳情</h3>
-                </div>
-                <button onclick="closeDetail()" class="text-slate-400 p-2 bg-slate-50 rounded-full"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg></button>
-            </div>
-            <div class="space-y-4 mb-6">
-                <div>
-                    <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">時間範圍</label>
-                    <p id="detailTimeRange" class="font-bold text-slate-800">09:00 - 18:00</p>
-                </div>
-                <div class="flex justify-between border-t border-slate-50 pt-3">
-                    <div>
-                        <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">淨工時</label>
-                        <p id="detailHours" class="font-black text-slate-800 text-lg">8.00h</p>
-                    </div>
-                    <div class="text-right">
-                        <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">小計薪資</label>
-                        <p id="detailSalary" class="font-black text-blue-600 text-lg">$1,520</p>
-                    </div>
-                </div>
-                <div id="detailNoteSection" class="hidden">
-                    <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">備註</label>
-                    <p id="detailNote" class="text-xs text-slate-500 font-medium bg-slate-50 p-3 rounded-xl border border-slate-100"></p>
-                </div>
-            </div>
-            <div class="grid grid-cols-2 gap-3">
-                <button onclick="deleteSingleRecord()" class="py-3 bg-rose-50 text-rose-600 text-xs font-black rounded-l-full rounded-r-xl active:scale-95 transition-all">刪除紀錄</button>
-                <button onclick="editSingleRecord()" class="py-3 bg-slate-900 text-white text-xs font-black rounded-r-full rounded-l-xl active:scale-95 transition-all">編輯內容</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<script>
-    const STORAGE_KEY = 'work_hours_v4_multi';
-    let currentDate = new Date();
-    let selectedDateStr = new Date().toLocaleDateString('en-CA');
-    let isYearView = false;
-    let dynamicHolidays = {};
-    let weekendHolidays = {}; // 新增：用於標記紅底但不雙倍的假日
-    
-    let editingIndex = -1;
-    let selectedColor = 'emerald';
-    let lastQueryResult = []; 
-    let lastTotalSalary = 0;
-    let lastTotalHours = 0;
-
-    const COLOR_THEMES = {
-        emerald: { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200' },
-        amber: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200' },
-        rose: { bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-200' },
-        blue: { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
-        purple: { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200' },
-        orange: { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200' },
-        pink: { bg: 'bg-pink-50', text: 'text-pink-700', border: 'border-pink-200' }
-    };
-    
-    let touchStartX = 0, touchStartY = 0, touchEndX = 0, touchEndY = 0;
-    let pinchStartDist = 0;
-    const swipeThreshold = 50;
-
-    let storageData = JSON.parse(localStorage.getItem(STORAGE_KEY)) || { 
-        records: {}, 
-        settings: { 
-            defaultRate: 190, defaultTitle: "上班", defaultStartTime: "09:00", defaultEndTime: "18:00", defaultBreak: 0,
-            showTitle: true, showTime: false, showHours: true, showSalary: true, showNote: false
-        },
-        titleHistory: {} 
-    };
-    
-    let workData = storageData.records;
-
-    // 2026 國定假日原始清單
-    const RAW_HOLIDAYS_2026 = {
-        "2026-01-01": "元旦", 
-        "2026-02-16": "除夕", 
-        "2026-02-17": "初一", 
-        "2026-02-18": "初二", 
-        "2026-02-19": "初三", 
-        "2026-02-28": "二二八", 
-        "2026-04-04": "兒童節", 
-        "2026-04-05": "清明節", 
-        "2026-05-01": "勞動節", 
-        "2026-06-19": "端午節", 
-        "2026-09-25": "中秋節", 
-        "2026-10-10": "國慶日"
-    };
-
-    function calculateHolidays() {
-        dynamicHolidays = {};
-        weekendHolidays = {};
-        
-        Object.entries(RAW_HOLIDAYS_2026).forEach(([dateStr, name]) => {
-            const date = new Date(dateStr);
-            const dow = date.getDay(); // 0:日, 6:六
-
-            // 針對 2026 年 4 月份特別邏輯
-            if (dateStr === "2026-04-04" || dateStr === "2026-04-05") {
-                // 4/4 兒童節當天，4/5 清明節當天：列入國定假日雙倍範圍 (紅底+紅點)
-                dynamicHolidays[dateStr] = name;
-                
-                // 補假邏輯：
-                // 兒童節 4/4(六) 補假於 4/3(五)
-                // 清明節 4/5(日) 補假於 4/6(一)
-                // 4/3, 4/6 標記為假日紅底，但不列入雙倍薪水 (不加紅點)
-                if (dateStr === "2026-04-04") {
-                    weekendHolidays["2026-04-03"] = "兒童節 補假";
-                } else {
-                    weekendHolidays["2026-04-06"] = "清明節 補假";
-                }
-            } else {
-                // 其他節日的正常邏輯
-                dynamicHolidays[dateStr] = name;
-                if (dow === 6) { 
-                    const prev = new Date(date); prev.setDate(date.getDate() - 1);
-                    dynamicHolidays[prev.toISOString().split('T')[0]] = `${name} 補假`;
-                } else if (dow === 0) {
-                    const next = new Date(date); next.setDate(date.getDate() + 1);
-                    dynamicHolidays[next.toISOString().split('T')[0]] = `${name} 補假`;
-                }
-            }
-        });
-    }
-
-    class iOSPicker {
-        constructor(containerId, options, initialValue, onChange) {
-            this.container = document.getElementById(containerId);
-            this.originalOptions = options;
-            this.onChange = onChange;
-            this.options = [...options, ...options, ...options];
-            this.itemHeight = 32; this.offsetY = 44; this.currentY = 0;
-            this.render(); this.initEvents(); this.setValue(initialValue);
-        }
-        render() {
-            this.container.innerHTML = `<div class="picker-selection-bar"></div><div class="picker-wheel">${this.options.map(opt => `<div class="picker-item">${String(opt).padStart(2, '0')}</div>`).join('')}</div>`;
-            this.wheel = this.container.querySelector('.picker-wheel');
-            this.items = this.container.querySelectorAll('.picker-item');
-        }
-        initEvents() {
-            let startY = 0, lastMoveY = 0;
-            const onStart = (e) => { this.isDragging = true; startY = (e.touches ? e.touches[0].pageY : e.pageY); lastMoveY = startY; this.wheel.style.transition = 'none'; };
-            const onMove = (e) => { 
-                if (!this.isDragging) return; 
-                const currentY = (e.touches ? e.touches[0].pageY : e.pageY); 
-                const deltaY = currentY - lastMoveY;
-                this.currentY += deltaY; 
-                const totalH = this.originalOptions.length * this.itemHeight;
-                if (this.currentY > -totalH/2) this.currentY -= totalH;
-                if (this.currentY < -2.5*totalH) this.currentY += totalH;
-                this.updateTransform(); lastMoveY = currentY;
-            };
-            const onEnd = () => { if (this.isDragging) { this.isDragging = false; this.snapToNearest(); } };
-            this.container.addEventListener('touchstart', onStart, { passive: true });
-            this.container.addEventListener('touchmove', onMove, { passive: true });
-            this.container.addEventListener('touchend', onEnd);
-            this.container.addEventListener('mousedown', onStart);
-            window.addEventListener('mousemove', onMove);
-            window.addEventListener('mouseup', onEnd);
-        }
-        snapToNearest() {
-            this.selectedIndex = Math.round(Math.abs(this.currentY) / this.itemHeight);
-            this.currentY = -this.selectedIndex * this.itemHeight;
-            this.wheel.style.transition = 'transform 0.4s cubic-bezier(0.23, 1, 0.32, 1)';
-            this.updateTransform(); if (this.onChange) this.onChange(this.getValue());
-        }
-        updateTransform() {
-            this.wheel.style.transform = `translateY(${this.currentY + this.offsetY}px)`;
-            const approx = Math.round(Math.abs(this.currentY) / this.itemHeight);
-            this.items.forEach((item, i) => {
-                const dist = Math.abs(i - (Math.abs(this.currentY) / this.itemHeight));
-                item.classList.toggle('selected', i === approx);
-                item.style.opacity = Math.max(0.2, 1 - dist * 0.4);
-                item.style.transform = `scale(${Math.max(0.8, 1 - dist * 0.05)})`;
-            });
-        }
-        getValue() { return this.originalOptions[this.selectedIndex % this.originalOptions.length]; }
-        setValue(val) { 
-            const idx = this.originalOptions.indexOf(parseInt(val)); 
-            if (idx !== -1) { 
-                this.selectedIndex = idx + this.originalOptions.length; 
-                this.currentY = -this.selectedIndex * this.itemHeight; 
-                this.updateTransform(); 
-            } 
-        }
-    }
-
-    let pickers = {};
-    function init() {
-        calculateHolidays();
-        const hrs = Array.from({length: 24}, (_, i) => i);
-        const mins = Array.from({length: 12}, (_, i) => i * 5);
-        pickers.sH = new iOSPicker('startHourPicker', hrs, 9, () => updatePreview());
-        pickers.sM = new iOSPicker('startMinutePicker', mins, 0, () => updatePreview());
-        pickers.eH = new iOSPicker('endHourPicker', hrs, 18, () => updatePreview());
-        pickers.eM = new iOSPicker('endMinutePicker', mins, 0, () => updatePreview());
-        renderCalendar();
-        setupGestureEvents();
-        selectColor('emerald');
-
-        window.addEventListener('touchmove', function(e) {
-            if (document.body.classList.contains('lock-bg')) {
-                if (!e.target.closest('.scrollable-content')) e.preventDefault();
-            }
-        }, { passive: false });
-    }
-
-    function toggleRangeStats() {
-        const overlay = document.getElementById('rangeStatsOverlay');
-        if (overlay.classList.contains('hidden')) {
-            overlay.classList.remove('hidden');
-            document.body.classList.add('lock-bg');
-            const now = new Date();
-            const first = new Date(now.getFullYear(), now.getMonth(), 1).toLocaleDateString('en-CA');
-            const today = now.toLocaleDateString('en-CA');
-            document.getElementById('statsStartDate').value = first;
-            document.getElementById('statsEndDate').value = today;
-            setTimeout(() => overlay.classList.add('opacity-100'), 10);
-        } else {
-            overlay.classList.remove('opacity-100');
-            setTimeout(() => {
-                overlay.classList.add('hidden');
-                document.body.classList.remove('lock-bg');
-            }, 300);
-        }
-    }
-
-    function execRangeStats() {
-        const start = document.getElementById('statsStartDate').value;
-        const end = document.getElementById('statsEndDate').value;
-        const filterTitle = document.getElementById('statsFilterTitle').value.trim().toLowerCase();
-        const list = document.getElementById('rangeDetailsList');
-        const summary = document.getElementById('rangeResultSummary');
-        const copyBtn = document.getElementById('copyRangeBtn');
-        
-        if (!start || !end) return;
-
-        list.innerHTML = '';
-        lastQueryResult = [];
-        lastTotalSalary = 0;
-        lastTotalHours = 0;
-        
-        let foundCount = 0; 
-        const sDates = Object.keys(workData).sort();
-        const weekDays = ['日', '一', '二', '三', '四', '五', '六'];
-
-        sDates.forEach(dStr => {
-            if (dStr >= start && dStr <= end) {
-                workData[dStr].forEach(item => {
-                    if (filterTitle === "" || item.title.toLowerCase().includes(filterTitle)) {
-                        foundCount++;
-                        const mult = !!dynamicHolidays[dStr] ? 2 : 1;
-                        const pay = Math.round(item.hours * item.rate * mult);
-                        lastTotalSalary += pay; lastTotalHours += item.hours;
-
-                        const dateObj = new Date(dStr);
-                        const weekDay = weekDays[dateObj.getDay()];
-                        const shortDate = `${dateObj.getMonth()+1}/${dateObj.getDate()}`;
-
-                        lastQueryResult.push({
-                            dateText: `${shortDate}（${weekDay}）`,
-                            timeText: `${item.startTime}-${item.endTime}`,
-                            hoursText: `${item.hours.toFixed(1)}h`,
-                            payText: `$${pay}`
-                        });
-
-                        const div = document.createElement('div');
-                        div.className = "p-4 bg-white border border-slate-100 rounded-2xl flex justify-between items-center shadow-sm";
-                        div.innerHTML = `
-                            <div class="flex flex-col">
-                                <div class="flex items-center gap-2 mb-1">
-                                    <span class="text-[10px] font-black bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full">${shortDate}（${weekDay}）</span>
-                                    <span class="text-[10px] font-bold text-slate-400">${item.startTime}-${item.endTime}</span>
-                                </div>
-                                <p class="text-sm font-black text-slate-800">${item.title}</p>
-                            </div>
-                            <div class="text-right">
-                                <p class="text-lg font-black text-blue-600">$${pay.toLocaleString()}</p>
-                                <p class="text-[10px] font-bold text-slate-400">${item.hours.toFixed(1)}h</p>
-                            </div>
-                        `;
-                        list.appendChild(div);
-                    }
-                });
-            }
-        });
-
-        if (foundCount > 0) {
-            summary.classList.remove('hidden');
-            copyBtn.classList.remove('hidden');
-            document.getElementById('rangeTotalSalary').innerText = `$${Math.round(lastTotalSalary).toLocaleString()}`;
-            document.getElementById('rangeTotalHours').innerText = `${lastTotalHours.toFixed(1)}h`;
-            
-            document.getElementById('labelSalary').innerText = "預估薪資";
-            document.getElementById('labelHours').innerText = "累積工時";
-            document.getElementById('totalSalaryNet').innerText = `$${Math.round(lastTotalSalary).toLocaleString()}`;
-            document.getElementById('totalHoursNet').innerHTML = `${lastTotalHours.toFixed(1)} <span class="opacity-40 text-[10px]">hr (${foundCount}筆)</span>`;
-            
-        } else {
-            summary.classList.add('hidden');
-            copyBtn.classList.add('hidden');
-            list.innerHTML = '<p class="text-center py-10 text-slate-400 font-bold text-sm">此範圍內無相關紀錄</p>';
-        }
-    }
-
-    function copyRangeToClipboard() {
-        if (lastQueryResult.length === 0) return;
-        
-        let copyText = lastQueryResult.map(item => `${item.dateText} ${item.timeText} ｜ ${item.hoursText} ｜ ${item.payText}`).join('\n');
-        
-        copyText += `\n----------------------\n`;
-        copyText += `總計工時：${lastTotalHours.toFixed(1)}h\n`;
-        copyText += `總計薪資：$${Math.round(lastTotalSalary).toLocaleString()}`;
-
-        const tempTextArea = document.createElement("textarea");
-        tempTextArea.value = copyText;
-        document.body.appendChild(tempTextArea);
-        tempTextArea.select();
-        try {
-            document.execCommand('copy');
-            const btn = document.getElementById('copyRangeBtn');
-            const originalHTML = btn.innerHTML;
-            btn.innerHTML = '<svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>';
-            setTimeout(() => { btn.innerHTML = originalHTML; }, 2000);
-        } catch (err) { alert('無法複製'); }
-        document.body.removeChild(tempTextArea);
-    }
-
-    function selectColor(color) {
-        selectedColor = color;
-        document.querySelectorAll('.color-dot').forEach(dot => {
-            dot.classList.toggle('selected', dot.dataset.color === color);
-        });
-    }
-
-    function toggleView(forceView) {
-        if (forceView === 'year') isYearView = true;
-        else if (forceView === 'month') isYearView = false;
-        else isYearView = !isYearView;
-        document.getElementById('monthView').classList.toggle('hidden', isYearView);
-        document.getElementById('yearView').classList.toggle('hidden', !isYearView);
-        document.getElementById('navHeader').classList.toggle('hidden', isYearView);
-        const ls = document.getElementById('labelSalary'), lh = document.getElementById('labelHours');
-        if (isYearView) { ls.innerText = "年度預估總薪資"; lh.innerText = "年度累計總工時"; } 
-        else { ls.innerText = "預估本月薪資"; lh.innerText = "本月累計工時"; }
-        renderCalendar();
-    }
-
-    function toggleSettings() { 
-        const overlay = document.getElementById('settingsOverlay');
-        if (overlay.classList.contains('hidden')) {
-            overlay.classList.remove('hidden');
-            document.body.classList.add('lock-bg');
-            document.getElementById('settingDefaultRate').value = storageData.settings.defaultRate;
-            document.getElementById('checkShowTitle').checked = storageData.settings.showTitle !== false;
-            document.getElementById('checkShowTime').checked = storageData.settings.showTime === true;
-            document.getElementById('checkShowHours').checked = storageData.settings.showHours !== false;
-            document.getElementById('checkShowSalary').checked = storageData.settings.showSalary !== false;
-            document.getElementById('checkShowNote').checked = storageData.settings.showNote === true;
-            setTimeout(() => overlay.classList.add('opacity-100'), 10);
-        } else {
-            overlay.classList.remove('opacity-100');
-            setTimeout(() => { overlay.classList.add('hidden'); document.body.classList.remove('lock-bg'); }, 300);
-        }
-    }
-
-    function updateSetting(key, val) {
-        storageData.settings[key] = val;
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(storageData));
-        renderCalendar();
-    }
-
-    function saveSettings() { 
-        storageData.settings.defaultRate = parseFloat(document.getElementById('settingDefaultRate').value) || 0; 
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(storageData)); 
-        toggleSettings(); updateStats(); renderCalendar();
-    }
-
-    function exportData() {
-        const dataStr = btoa(unescape(encodeURIComponent(JSON.stringify(storageData))));
-        const temp = document.createElement("textarea"); temp.value = dataStr;
-        document.body.appendChild(temp); temp.select(); document.execCommand("copy");
-        document.body.removeChild(temp);
-    }
-
-    function importData() {
-        const code = prompt("請貼上資料代碼：");
-        if (code) {
-            try {
-                const decoded = JSON.parse(decodeURIComponent(escape(atob(code))));
-                if (confirm("確定要匯入嗎？現有紀錄將被蓋掉")) {
-                    storageData = decoded; workData = storageData.records;
-                    localStorage.setItem(STORAGE_KEY, JSON.stringify(storageData));
-                    location.reload();
-                }
-            } catch (e) { alert("代碼錯誤"); }
-        }
-    }
-
-    function renderCalendar() {
-        const y = currentDate.getFullYear(), m = currentDate.getMonth();
-        document.getElementById('yearDisplay').innerText = `${y}年`;
-        if (isYearView) { document.getElementById('yearHeaderIos').innerText = y; renderYearView(y); } 
-        else { document.getElementById('monthDisplay').innerText = `${m + 1}月`; renderMonthView(y, m); }
-        updateStats();
-    }
-
-    function renderMonthView(year, month) {
-        const dim = new Date(year, month + 1, 0).getDate(), fd = new Date(year, month, 1).getDay();
-        const grid = document.getElementById('calendarDays'); grid.innerHTML = '';
-        const s = storageData.settings;
-        for (let i = 0; i < fd; i++) grid.appendChild(document.createElement('div'));
-        for (let d = 1; d <= dim; d++) {
-            const dStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-            const isW = [0, 6].includes(new Date(year, month, d).getDay());
-            // 判定是否紅底：是國定假日 OR 是週末假日 OR 屬於補假(4/3, 4/6)
-            const isH = !!dynamicHolidays[dStr];
-            const isWkHoliday = !!weekendHolidays[dStr];
-            
-            const data = workData[dStr], el = document.createElement('div');
-            el.className = `day-cell cursor-pointer ${isH || isWkHoliday ? 'is-holiday' : (isW ? 'is-weekend' : '')}`;
-            
-            if (dStr === selectedDateStr) el.classList.add('is-today');
-            let info = '<div class="flex flex-col gap-0.5 mt-1 overflow-hidden w-full pointer-events-none">';
-            if (data && Array.isArray(data)) {
-                data.sort((a, b) => a.startTime.localeCompare(b.startTime)).forEach(item => {
-                    const theme = COLOR_THEMES[item.color || 'blue'], pay = Math.round(item.hours * item.rate * (isH ? 2 : 1));
-                    info += `<div class="${theme.bg} ${theme.border} ${theme.text} border-l-2 px-1 py-0.5 rounded-sm flex flex-col">${s.showTitle?`<div class="text-[8px] font-black truncate">${item.title}</div>`:''}${s.showTime?`<div class="text-[7px] font-bold opacity-80">${item.startTime}-${item.endTime}</div>`:''}${s.showHours?`<div class="text-[7px] font-bold opacity-70">${item.hours.toFixed(1)}h</div>`:''}${s.showSalary?`<div class="text-[7px] font-bold opacity-70">$${pay}</div>`:''}</div>`;
-                });
-            }
-            // 只有國定假日 (dynamicHolidays) 才有紅點
-            el.innerHTML = `<div class="text-[10px] font-black ${isH || isWkHoliday || isW ? 'text-red-500' : 'text-slate-400'}">${d}</div>${isH ? '<div class="holiday-dot"></div>' : ''}${info}</div>`;
-            el.onclick = () => { selectedDateStr = dStr; if (data && data.length > 0) openDailyList(dStr); else renderCalendar(); };
-            grid.appendChild(el);
-        }
-    }
-
-    function openDailyList(dStr) {
-        selectedDateStr = dStr; document.body.classList.add('lock-bg');
-        document.getElementById('dailyListDate').innerText = dStr.replace(/-/g, '/') + " 紀錄清單";
-        const container = document.getElementById('dailyItemsContainer'); container.innerHTML = '';
-        const recs = workData[dStr] || []; recs.sort((a, b) => a.startTime.localeCompare(b.startTime));
-        recs.forEach((item, idx) => {
-            const theme = COLOR_THEMES[item.color || 'emerald'], pay = Math.round(item.hours * item.rate * (!!dynamicHolidays[dStr] ? 2 : 1));
-            const div = document.createElement('div'); div.className = "swipe-item-container mb-3";
-            const noteHtml = item.note ? `<p class="text-[10px] font-medium text-slate-500 mt-1 line-clamp-1 border-t border-black/5 pt-1">${item.note}</p>` : '';
-            div.innerHTML = `<div class="swipe-actions" onclick="quickDelete(${idx}, event)"><svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></div><div class="swipe-content ${theme.bg} ${theme.border} border border-l-4 p-3 rounded-2xl flex justify-between items-center active:scale-[0.98] transition-all cursor-pointer" data-index="${idx}" ontouchstart="handleItemTouchStart(event)" ontouchmove="handleItemTouchMove(event)" onclick="handleItemClick(${idx}, event)"><div class="flex flex-col"><span class="text-[10px] font-black ${theme.text}">${item.startTime}-${item.endTime}</span><span class="text-sm font-black text-slate-900">${item.title}</span>${noteHtml}</div><div class="text-right"><span class="text-sm font-black text-slate-800">$${pay.toLocaleString()}</span><p class="text-sm font-bold text-slate-400">${item.hours.toFixed(1)}h</p></div></div>`;
-            container.appendChild(div);
-        });
-        const modal = document.getElementById('dailyListModal'); modal.classList.remove('hidden'); modal.classList.add('flex');
-    }
-
-    let itemStartX = 0, currentSwipedEl = null;
-    function handleItemTouchStart(e) { itemStartX = e.touches[0].pageX; if (currentSwipedEl && currentSwipedEl !== e.currentTarget) currentSwipedEl.classList.remove('swiped'); }
-    function handleItemTouchMove(e) { const diff = itemStartX - e.touches[0].pageX; if (diff > 30) { e.currentTarget.classList.add('swiped'); currentSwipedEl = e.currentTarget; } else if (diff < -30) { e.currentTarget.classList.remove('swiped'); } }
-    function handleItemClick(idx, e) { if (e.currentTarget.classList.contains('swiped')) { e.currentTarget.classList.remove('swiped'); return; } openDetail(selectedDateStr, idx); closeDailyList(); }
-
-    function quickDelete(idx, e) {
-        e.stopPropagation(); const recs = workData[selectedDateStr];
-        if (recs && recs[idx]) { recs.splice(idx, 1); if (recs.length === 0) delete workData[selectedDateStr]; localStorage.setItem(STORAGE_KEY, JSON.stringify(storageData)); if (workData[selectedDateStr]) openDailyList(selectedDateStr); else closeDailyList(); renderCalendar(); updateStats(); }
-    }
-
-    function closeDailyList() { document.getElementById('dailyListModal').classList.remove('flex'); document.getElementById('dailyListModal').classList.add('hidden'); document.body.classList.remove('lock-bg'); }
-
-    function openDetail(dStr, idx) {
-        selectedDateStr = dStr; editingIndex = idx; document.body.classList.add('lock-bg');
-        const rec = workData[dStr][idx], mult = !!dynamicHolidays[dStr] ? 2 : 1;
-        document.getElementById('detailDateDisplay').innerText = dStr.replace(/-/g, '/');
-        document.getElementById('detailTitle').innerText = rec.title;
-        document.getElementById('detailTimeRange').innerText = `${rec.startTime} - ${rec.endTime} (扣除 ${rec.breakMinutes || 0}m)`;
-        document.getElementById('detailHours').innerText = `${rec.hours.toFixed(2)}h`;
-        document.getElementById('detailSalary').innerText = `$${Math.round(rec.hours * rec.rate * mult).toLocaleString()}`;
-        const ns = document.getElementById('detailNoteSection'); if (rec.note) { document.getElementById('detailNote').innerText = rec.note; ns.classList.remove('hidden'); } else ns.classList.add('hidden');
-        const modal = document.getElementById('detailModal'); modal.classList.remove('hidden'); modal.classList.add('flex');
-    }
-
-    function closeDetail() { document.getElementById('detailModal').classList.add('hidden'); document.body.classList.remove('lock-bg'); }
-
-    function deleteSingleRecord() { if (editingIndex > -1) { workData[selectedDateStr].splice(editingIndex, 1); if (workData[selectedDateStr].length === 0) delete workData[selectedDateStr]; localStorage.setItem(STORAGE_KEY, JSON.stringify(storageData)); closeDetail(); renderCalendar(); } }
-
-    function editSingleRecord() {
-        const rec = workData[selectedDateStr][editingIndex]; openModalForSelected();
-        document.getElementById('inputTitle').value = rec.title; document.getElementById('inputRate').value = rec.rate;
-        document.getElementById('breakMinutes').value = rec.breakMinutes || 0; document.getElementById('inputNote').value = rec.note || "";
-        toggleBreakInput((rec.breakMinutes || 0) > 0); selectColor(rec.color || 'emerald');
-        const [sh, sm] = rec.startTime.split(':').map(Number), [eh, em] = rec.endTime.split(':').map(Number);
-        pickers.sH.setValue(sh); pickers.sM.setValue(sm); pickers.eH.setValue(eh); pickers.eM.setValue(em);
-        document.getElementById('modalSubmitBtn').innerText = "更新紀錄"; closeDetail(); updatePreview();
-    }
-
-    function renderYearView(y) {
-        const container = document.getElementById('yearMonthsIos'); container.innerHTML = '';
-        const months = ["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"], today = new Date().toLocaleDateString('en-CA');
-        for (let m = 0; m < 12; m++) {
-            const mDiv = document.createElement('div'); mDiv.className = 'text-left active:opacity-50 transition-opacity';
-            let h = `<div class="text-[12px] font-black mb-1">${months[m]}</div><div class="grid grid-cols-7 gap-px">`;
-            const dim = new Date(y, m+1, 0).getDate(), fd = new Date(y, m, 1).getDay();
-            for (let i = 0; i < fd; i++) h += `<div></div>`;
-            for (let d = 1; d <= dim; d++) {
-                const ds = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-                const has = workData[ds] && workData[ds].length, isT = ds === today;
-                const isH = !!dynamicHolidays[ds];
-                const isWkH = !!weekendHolidays[ds];
-                const isW = [0,6].includes(new Date(y,m,d).getDay());
-                h += `<div class="text-[7px] h-3.5 w-3.5 flex items-center justify-center ${isT?'bg-blue-500 rounded-full text-white':(has?'bg-slate-200 rounded-sm text-slate-900 font-bold':(isH||isWkH||isW?'text-red-300':'text-slate-300'))}">${d}</div>`;
-            }
-            mDiv.innerHTML = h + `</div>`; mDiv.onclick = () => { currentDate.setMonth(m); toggleView('month'); };
-            container.appendChild(mDiv);
-        }
-    }
-
-    function changeDate(v) {
-        const view = document.getElementById(isYearView ? 'yearView' : 'monthView');
-        view.style.transform = `translateX(${v*-20}px)`; view.style.opacity = '0';
-        setTimeout(() => {
-            if (isYearView) currentDate.setFullYear(currentDate.getFullYear() + v); else currentDate.setMonth(currentDate.getMonth() + v);
-            renderCalendar(); view.style.transform = `translateX(${v*20}px)`;
-            setTimeout(() => { view.style.transform = 'translateX(0)'; view.style.opacity = '1'; }, 10);
-        }, 150);
-    }
-    
-    function goToToday() { currentDate = new Date(); selectedDateStr = currentDate.toLocaleDateString('en-CA'); if (isYearView) toggleView('month'); renderCalendar(); }
-
-    function toggleBreakInput(f) {
-        const btn = document.getElementById('breakBtn'), wrap = document.getElementById('breakInputWrapper');
-        let act = f !== undefined ? f : !btn.classList.contains('bg-blue-600');
-        if (act) { btn.innerText = "有休息"; btn.className = "px-4 py-2 bg-blue-600 text-white rounded-xl text-[10px] font-black transition-all"; wrap.classList.remove('hidden'); } 
-        else { btn.innerText = "無休息"; btn.className = "px-4 py-2 bg-slate-200 text-slate-500 rounded-xl text-[10px] font-black transition-all"; wrap.classList.add('hidden'); document.getElementById('breakMinutes').value = 0; }
-        updatePreview();
-    }
-
-    function openModalForSelected() {
-        if (editingIndex === -1) {
-            const s = storageData.settings;
-            document.getElementById('modalSubmitBtn').innerText = "加入新項目"; document.getElementById('inputTitle').value = s.defaultTitle;
-            document.getElementById('inputRate').value = s.defaultRate; document.getElementById('breakMinutes').value = 0; toggleBreakInput(false);
-            const [sh, sm] = s.defaultStartTime.split(':').map(Number), [eh, em] = s.defaultEndTime.split(':').map(Number);
-            pickers.sH.setValue(sh); pickers.sM.setValue(sm); pickers.eH.setValue(eh); pickers.eM.setValue(em);
-        }
-        document.body.classList.add('lock-bg'); document.getElementById('modalDate').innerText = selectedDateStr.replace(/-/g, '/');
-        const h = dynamicHolidays[selectedDateStr], tag = document.getElementById('holidayTag');
-        if (h) { tag.innerText = `${h} 2x`; tag.classList.remove('hidden'); } else tag.classList.add('hidden');
-        updatePreview(); const modal = document.getElementById('editModal'); modal.classList.remove('hidden'); modal.classList.add('flex');
-    }
-
-    function autoFillConfig(t) {
-        const c = storageData.titleHistory[t]; if (c && editingIndex === -1) { 
-            document.getElementById('inputRate').value = c.rate; document.getElementById('breakMinutes').value = c.breakMinutes || 0;
-            toggleBreakInput((c.breakMinutes || 0) > 0); selectColor(c.color || 'emerald');
-            const [sh, sm] = c.startTime.split(':').map(Number), [eh, em] = c.endTime.split(':').map(Number);
-            pickers.sH.setValue(sh); pickers.sM.setValue(sm); pickers.eH.setValue(eh); pickers.eM.setValue(em); updatePreview();
-        }
-    }
-
-    function updatePreview() {
-        const rate = parseFloat(document.getElementById('inputRate').value) || 0, bm = parseInt(document.getElementById('breakMinutes').value) || 0;
-        let diff = (pickers.eH.getValue() * 60 + pickers.eM.getValue()) - (pickers.sH.getValue() * 60 + pickers.sM.getValue()); if (diff < 0) diff += 1440;
-        const hrs = Math.max(0, diff - bm) / 60, pay = Math.round(hrs * rate * (!!dynamicHolidays[selectedDateStr] ? 2 : 1));
-        document.getElementById('previewGrossHours').innerText = `${hrs.toFixed(2)}h`;
-        document.getElementById('previewNetSalary').innerText = `$${pay.toLocaleString()}`;
-    }
-
-    function saveData() {
-        const title = document.getElementById('inputTitle').value || "打工", rate = parseFloat(document.getElementById('inputRate').value) || 0, bm = parseInt(document.getElementById('breakMinutes').value) || 0;
-        const sT = `${String(pickers.sH.getValue()).padStart(2,'0')}:${String(pickers.sM.getValue()).padStart(2,'0')}`, eT = `${String(pickers.eH.getValue()).padStart(2,'0')}:${String(pickers.eM.getValue()).padStart(2,'0')}`;
-        let diff = (pickers.eH.getValue() * 60 + pickers.eM.getValue()) - (pickers.sH.getValue() * 60 + pickers.sM.getValue()); if (diff < 0) diff += 1440;
-        const rec = { title, hours: Math.max(0, diff - bm)/60, rate, startTime: sT, endTime: eT, breakMinutes: bm, note: document.getElementById('inputNote').value, color: selectedColor };
-        if (!storageData.titleHistory) storageData.titleHistory = {}; storageData.titleHistory[title] = { rate, startTime: sT, endTime: eT, breakMinutes: bm, color: selectedColor };
-        if (!Array.isArray(workData[selectedDateStr])) workData[selectedDateStr] = [];
-        if (editingIndex > -1) workData[selectedDateStr][editingIndex] = rec; else workData[selectedDateStr].push(rec);
-        storageData.settings.defaultTitle = title; storageData.settings.defaultRate = rate; localStorage.setItem(STORAGE_KEY, JSON.stringify(storageData)); 
-        closeModal(); renderCalendar();
-    }
-
-    function clearDayRecords() { if (workData[selectedDateStr]) { delete workData[selectedDateStr]; localStorage.setItem(STORAGE_KEY, JSON.stringify(storageData)); closeModal(); renderCalendar(); } }
-    function closeModal() { document.getElementById('editModal').classList.add('hidden'); document.body.classList.remove('lock-bg'); editingIndex = -1; }
-
-    function updateStats() {
-        if (document.getElementById('searchWrapper').classList.contains('active')) return;
-        let sal = 0, hrs = 0, pref = isYearView ? `${currentDate.getFullYear()}-` : `${currentDate.getFullYear()}-${String(currentDate.getMonth()+1).padStart(2,'0')}-`;
-        Object.keys(workData).forEach(d => { if (d.startsWith(pref)) { workData[d].forEach(item => { hrs += item.hours; sal += item.hours * item.rate * (!!dynamicHolidays[d]?2:1); }); } });
-        document.getElementById('totalHoursNet').innerHTML = `${hrs.toFixed(1)} <span class="opacity-40 text-[10px]">hr</span>`;
-        document.getElementById('totalSalaryNet').innerText = `$${Math.round(sal).toLocaleString()}`;
-        if (isYearView) {
-            document.getElementById('labelSalary').innerText = "年度預估總薪資";
-            document.getElementById('labelHours').innerText = "年度累計總工時";
-        } else {
-            document.getElementById('labelSalary').innerText = "預估本月薪資";
-            document.getElementById('labelHours').innerText = "本月累計工時";
-        }
-    }
-
-    function openSearch() { document.getElementById('centerActions').classList.add('hidden'); document.getElementById('settingsBtn').classList.add('hidden'); document.getElementById('searchWrapper').classList.add('active'); document.getElementById('clearSearchBtn').classList.remove('hidden'); document.body.classList.add('lock-bg'); setTimeout(() => document.getElementById('searchInput').focus(), 50); }
-    function closeSearch() { document.getElementById('searchWrapper').classList.remove('active'); document.getElementById('centerActions').classList.remove('hidden'); document.getElementById('settingsBtn').classList.remove('hidden'); document.getElementById('clearSearchBtn').classList.add('hidden'); document.getElementById('searchInput').value = ''; document.getElementById('searchResultsOverlay').classList.add('hidden'); document.body.classList.remove('lock-bg'); updateStats(); }
-    
-    function execSearch() {
-        const q = document.getElementById('searchInput').value.trim().toLowerCase(), overlay = document.getElementById('searchResultsOverlay');
-        if (!q) { overlay.classList.add('hidden'); updateStats(); return; }
-        overlay.innerHTML = ''; let tS = 0, tH = 0, count = 0;
-        const matched = Object.keys(workData).filter(d => workData[d].some(r => r.title.toLowerCase().includes(q) || (r.note && r.note.toLowerCase().includes(q)))).sort((a,b)=>b.localeCompare(a));
-        if (matched.length) {
-            overlay.classList.remove('hidden');
-            matched.forEach(d => { workData[d].forEach((item, idx) => {
-                if (!item.title.toLowerCase().includes(q) && !(item.note && item.note.toLowerCase().includes(q))) return;
-                count++;
-                const pay = item.hours * item.rate * (!!dynamicHolidays[d]?2:1); tS += pay; tH += item.hours;
-                const div = document.createElement('div'); div.className = "bg-slate-50 p-4 rounded-2xl flex justify-between items-center mb-2 border border-slate-100";
-                div.onclick = () => openDetail(d, idx);
-                div.innerHTML = `<div><p class="text-[9px] font-black text-blue-500">${d.replace(/-/g,'/')}</p><p class="font-bold">${item.title}</p></div><div class="text-right"><p class="font-black">$${Math.round(pay).toLocaleString()}</p><p class="text-[9px] text-slate-400">${item.hours.toFixed(1)}h</p></div>`;
-                overlay.appendChild(div);
-            }); });
-            
-            document.getElementById('labelSalary').innerText = "預估薪資";
-            document.getElementById('labelHours').innerText = "累積工時";
-            document.getElementById('totalHoursNet').innerHTML = `${tH.toFixed(1)} <span class="opacity-40 text-[10px]">hr (${count}筆)</span>`;
-            document.getElementById('totalSalaryNet').innerText = `$${Math.round(tS).toLocaleString()}`;
-        }
-    }
-    
-    function handleSearchBlur() { if (!document.getElementById('searchInput').value) setTimeout(closeSearch, 200); }
-
-    function setupGestureEvents() {
-        const app = document.getElementById('app');
-        app.addEventListener('touchstart', (e) => {
-            if (e.touches.length === 1) { touchStartX = e.touches[0].pageX; touchStartY = e.touches[0].pageY; } 
-            else if (e.touches.length === 2) pinchStartDist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
-        }, { passive: true });
-        app.addEventListener('touchmove', (e) => {
-            if (e.touches.length === 1) {
-                const dx = Math.abs(e.touches[0].pageX - touchStartX), dy = Math.abs(e.touches[0].pageY - touchStartY);
-                if (dx > dy && dx > 10 && !e.target.closest('.swipe-item-container') && e.cancelable) e.preventDefault();
-            } else if (e.touches.length === 2 && pinchStartDist > 0) {
-                const d = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
-                if (!isYearView && d/pinchStartDist < 0.75) { toggleView('year'); pinchStartDist = 0; }
-            }
-        }, { passive: false });
-        app.addEventListener('touchend', (e) => {
-            if (e.changedTouches.length === 1 && e.touches.length === 0) {
-                touchEndX = e.changedTouches[0].pageX; touchEndY = e.changedTouches[0].pageY;
-                const dx = touchEndX - touchStartX, dy = touchEndY - touchStartY;
-                if (Math.abs(dx) > Math.abs(dy) * 2 && Math.abs(dx) > swipeThreshold) changeDate(dx > 0 ? -1 : 1);
-            }
-            pinchStartDist = 0;
-        }, { passive: true });
-    }
-
-    window.onload = init;
-</script>
-</body>
-</html>
-
-```
+    <script>
+        const today = new Date();
+        let curYear = today.getFullYear();
+ 
